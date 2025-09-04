@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen Photo Detection API Tester</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+        .text-wrap {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-7xl flex flex-row space-x-8 h-[90vh]">
+
+        <div class="flex-1 flex flex-col items-center justify-start max-h-full">
+            <h1 class="text-3xl font-bold mb-4 text-gray-800">API Tester</h1>
+            <p class="text-center text-gray-600 mb-8">
+                Upload images to check if they were taken from a screen.
+            </p>
+
+            <form id="uploadForm" class="space-y-6 w-full max-w-sm">
+                <div id="fileInputArea">
+                    <label for="fileInput" class="block text-sm font-medium text-gray-700 mb-2">
+                        Select one or more Image Files
+                    </label>
+                    <div class="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
+                        <div class="space-y-1 text-center">
+                            <svg class="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                <path d="M28 8H12a2 2 0 00-2 2v15.28a2 2 0 00.9.72c.6.28 1.2.45 1.9.5H36.33a2 2 0 001.9-2.28V10a2 2 0 00-2-2h-8z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M42 16v18a2 2 0 01-2 2H8a2 2 0 01-2-2V10a2 2 0 012-2h10l4-4h8l4 4h10a2 2 0 012 2z" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <div class="flex text-sm text-gray-600">
+                                <label for="fileInput" class="relative cursor-pointer bg-white rounded-md font-medium text-indigo-600 hover:text-indigo-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                                    <span>Upload files</span>
+                                    <input id="fileInput" name="fileInput" type="file" class="sr-only" accept="image/jpeg, image/png" multiple>
+                                </label>
+                                <p class="pl-1">or drag and drop</p>
+                            </div>
+                            <p class="text-xs text-gray-500">
+                                PNG, JPG up to 10MB each
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="imagePreviewContainer" class="hidden mt-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-lg font-medium text-gray-900">Images Preview</h3>
+                        <a href="#" id="changePhotosLink" class="text-sm font-medium text-indigo-600 hover:text-indigo-500">Change photos</a>
+                    </div>
+                    <div id="imagePreviews" class="grid grid-cols-2 gap-4 max-h-60 overflow-y-auto"></div>
+                </div>
+
+                <div class="flex justify-center">
+                    <button id="predictButton" type="submit" class="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-within:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200" disabled>
+                        <span id="buttonText">Predict</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="flex-1 p-4 bg-gray-50 rounded-lg overflow-y-auto max-h-full">
+            <div id="predictionsContainer" class="space-y-4">
+                <h3 class="text-lg font-medium text-gray-900 text-center">Prediction Results</h3>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        const form = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const fileInputArea = document.getElementById('fileInputArea');
+        const predictButton = document.getElementById('predictButton');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreviews = document.getElementById('imagePreviews');
+        const predictionsContainer = document.getElementById('predictionsContainer');
+        const buttonText = document.getElementById('buttonText');
+        const changePhotosLink = document = document.getElementById('changePhotosLink');
+
+        fileInput.addEventListener('change', (e) => {
+            imagePreviews.innerHTML = '';
+            predictionsContainer.classList.add('hidden');
+            
+            const files = e.target.files;
+            if (files.length > 0) {
+                for (const file of files) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.alt = file.name;
+                        img.classList.add('w-full', 'h-auto', 'rounded-md', 'shadow-lg', 'object-contain');
+                        imagePreviews.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
+                }
+
+                imagePreviewContainer.classList.remove('hidden');
+                fileInputArea.classList.add('hidden');
+                predictButton.disabled = false;
+            } else {
+                predictButton.disabled = true;
+            }
+        });
+
+        changePhotosLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            fileInputArea.classList.remove('hidden');
+            imagePreviewContainer.classList.add('hidden');
+            predictionsContainer.classList.add('hidden');
+            fileInput.value = '';
+            imagePreviews.innerHTML = '';
+            predictButton.disabled = true;
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const files = fileInput.files;
+
+            if (files.length === 0) {
+                alert("Please select at least one file.");
+                return;
+            }
+
+            // Show loading state
+            buttonText.textContent = `Predicting ${files.length} images...`;
+            predictButton.classList.add('opacity-50', 'cursor-not-allowed');
+            predictButton.disabled = true;
+            predictionsContainer.innerHTML = '<h3 class="text-lg font-medium text-gray-900 text-center">Prediction Results</h3>';
+            predictionsContainer.classList.remove('hidden');
+
+            const formData = new FormData();
+            for (const file of files) {
+                formData.append('files', file);
+            }
+            
+            // Create a temporary "Processing..." card for each image
+            const tempCards = {};
+            for (const file of files) {
+                const card = document.createElement('div');
+                card.classList.add('p-4', 'bg-gray-100', 'rounded-md', 'space-y-2');
+                card.innerHTML = `
+                    <div class="flex items-center space-x-4">
+                        <img src="${URL.createObjectURL(file)}" alt="${file.name}" class="w-16 h-16 rounded-md object-cover"/>
+                        <div class="flex-1">
+                            <h4 class="text-sm font-medium text-gray-900 truncate">${file.name}</h4>
+                            <p class="text-sm text-gray-500">Processing...</p>
+                        </div>
+                    </div>
+                `;
+                predictionsContainer.appendChild(card);
+                tempCards[file.name] = card;
+            }
+
+            try {
+                // Fetch to the relative URL /predict, as the API is serving this page
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.detail || `HTTP error! status: ${response.status}`);
+                }
+
+                // Перебираємо масив predictions, який є в об'єкті data
+                for (const prediction of data.predictions) {
+                    const file = Array.from(files).find(f => f.name === prediction.filename);
+                    const card = tempCards[prediction.filename];
+                    
+                    // Отримуємо словник з чеком через ключ 'formatted_receipt'
+                    const formattedReceipt = prediction.formatted_receipt;
+                    const extractedText = prediction.extracted_text;
+                    
+                    if (card && file) {
+                        const probability = prediction.probability;
+                        const resultMessage = probability > 0.5 
+                            ? 'Likely from a screen'
+                            : 'Likely from a camera';
+                        const messageColor = probability > 0.5 
+                            ? 'text-red-600' 
+                            : 'text-green-600';
+
+                        let cardHtml = `
+                            <div class="flex items-center space-x-4">
+                                <img src="${URL.createObjectURL(file)}" alt="${file.name}" class="w-16 h-16 rounded-md object-cover"/>
+                                <div class="flex-1">
+                                    <h4 class="text-sm font-medium text-gray-900 truncate">${file.name}</h4>
+                                    <p class="text-sm font-bold ${messageColor}">${resultMessage}</p>
+                                    <p class="text-xs text-gray-500">Probability: ${(probability * 100).toFixed(2)}%</p>
+                                </div>
+                            </div>
+                        `;
+
+                        if (extractedText) {
+                            cardHtml += `
+                                <div class="mt-4 p-2 bg-white rounded-md border border-gray-200">
+                                    <h5 class="text-xs font-medium text-gray-800 mb-1">Extracted Text:</h5>
+                                    <p class="text-xs text-gray-600 text-wrap">${extractedText}</p>
+                                </div>
+                            `;
+                        }
+
+                        // Перевіряємо, чи існує словник formattedReceipt
+                        if (formattedReceipt) {
+                            let itemsHtml = '';
+                            if (formattedReceipt.items && formattedReceipt.items.length > 0) {
+                                itemsHtml = `
+                                    <h6 class="text-xs font-medium text-gray-700 mt-2 mb-1">Items:</h6>
+                                    <ul class="list-disc list-inside text-xs text-gray-600 space-y-1">
+                                `;
+                                formattedReceipt.items.forEach(item => {
+                                    const itemName = item.name || '-';
+                                    const itemQty = item.quantity || '-';
+                                    const itemPrice = item.price || '-';
+                                    itemsHtml += `<li>${itemName} (${itemQty} x ${itemPrice})</li>`;
+                                });
+                                itemsHtml += `</ul>`;
+                            }
+
+                            cardHtml += `
+                                <div class="mt-4 p-2 bg-white rounded-md border border-gray-200">
+                                    <h5 class="text-xs font-medium text-gray-800 mb-1">Structured Receipt Data:</h5>
+                                    <p class="text-xs text-gray-600"><strong>Store:</strong> ${formattedReceipt.store || '-'}</p>
+                                    <p class="text-xs text-gray-600"><strong>Total Amount:</strong> ${formattedReceipt.amount || '-'}</p>
+                                    <p class="text-xs text-gray-600"><strong>Date:</strong> ${formattedReceipt.date || '-'}</p>
+                                    ${itemsHtml}
+                                </div>
+                            `;
+                        } else {
+                            cardHtml += `
+                                <div class="mt-4 p-2 bg-white rounded-md border border-gray-200">
+                                    <h5 class="text-xs font-medium text-gray-800 mb-1">Structured Receipt Data:</h5>
+                                    <p class="text-xs text-gray-600">Could not extract structured data.</p>
+                                </div>
+                            `;
+                        }
+                        
+                        card.innerHTML = cardHtml;
+                    }
+                }
+
+            } catch (error) {
+                for (const cardName in tempCards) {
+                    const card = tempCards[cardName];
+                    card.innerHTML = `
+                        <div class="flex items-center space-x-4">
+                            <h4 class="text-sm font-medium text-gray-900 truncate">${cardName}</h4>
+                            <p class="text-sm font-bold text-gray-600">Error</p>
+                            <p class="text-xs text-gray-500">${error.message}</p>
+                        </div>
+                    `;
+                }
+            } finally {
+                buttonText.textContent = 'Predict';
+                predictButton.classList.remove('opacity-50', 'cursor-not-allowed');
+                predictButton.disabled = false;
+            }
+        });
+    </script>
+
+</body>
+</html>
