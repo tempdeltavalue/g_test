@@ -4,13 +4,17 @@ FROM python:3.9
 # Set the working directory in the container
 WORKDIR /app
 
-# Install system dependencies for OpenCV in headless mode
+# Install system dependencies for OpenCV and Tesseract
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-dev \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender1
+    libxrender1 \
+    tesseract-ocr \
+    tesseract-ocr-ukr \
+    tesseract-ocr-eng \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy the requirements file into the container
 COPY requirements.txt .

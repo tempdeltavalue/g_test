@@ -59,6 +59,13 @@
                     <div id="imagePreviews" class="grid grid-cols-2 gap-4 max-h-60 overflow-y-auto"></div>
                 </div>
 
+                <div class="flex items-center">
+                    <input id="useGeminiApi" name="useGeminiApi" type="checkbox" class="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded">
+                    <label for="useGeminiApi" class="ml-2 block text-sm text-gray-900">
+                        Use Gemini API for receipt parsing
+                    </label>
+                </div>
+
                 <div class="flex justify-center">
                     <button id="predictButton" type="submit" class="w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus-within:ring-offset-2 focus:ring-indigo-500 transition-colors duration-200" disabled>
                         <span id="buttonText">Predict</span>
@@ -84,7 +91,8 @@
         const imagePreviews = document.getElementById('imagePreviews');
         const predictionsContainer = document.getElementById('predictionsContainer');
         const buttonText = document.getElementById('buttonText');
-        const changePhotosLink = document = document.getElementById('changePhotosLink');
+        const changePhotosLink = document.getElementById('changePhotosLink');
+        const useGeminiApiCheckbox = document.getElementById('useGeminiApi');
 
         fileInput.addEventListener('change', (e) => {
             imagePreviews.innerHTML = '';
@@ -143,6 +151,8 @@
             for (const file of files) {
                 formData.append('files', file);
             }
+            // Додаємо стан чекбокса до FormData
+            formData.append('use_gemini_api', useGeminiApiCheckbox.checked);
             
             // Create a temporary "Processing..." card for each image
             const tempCards = {};
@@ -181,15 +191,29 @@
                     const card = tempCards[prediction.filename];
                     
                     // Отримуємо словник з чеком через ключ 'formatted_receipt'
-                    const formattedReceipt = prediction.formatted_receipt;
                     const extractedText = prediction.extracted_text;
+                    const formattedReceiptString = prediction.formatted_receipt;
+                    let formattedReceipt = null;
+
+                    if (formattedReceiptString) {
+                        try {
+                            formattedReceipt = JSON.parse(formattedReceiptString);
+                        } catch (error) {
+                            console.error(`Failed to parse formatted_receipt for ${prediction.filename}:`, error);
+                            formattedReceipt = { error: true, message: "Invalid JSON response from Gemini API.", raw_response: formattedReceiptString };
+                        }
+                    }
                     
                     if (card && file) {
-                        const probability = prediction.probability;
-                        const resultMessage = probability > 0.5 
+                        const prob_class1 = prediction.probability_class_1;
+                        const prob_class0 = prediction.probability_class_0;
+                        const predictedClass = prediction.predicted_class;
+                        const confidence = prediction.confidence;
+
+                        const resultMessage = predictedClass === 1 
                             ? 'Likely from a screen'
                             : 'Likely from a camera';
-                        const messageColor = probability > 0.5 
+                        const messageColor = predictedClass === 1 
                             ? 'text-red-600' 
                             : 'text-green-600';
 
@@ -199,7 +223,10 @@
                                 <div class="flex-1">
                                     <h4 class="text-sm font-medium text-gray-900 truncate">${file.name}</h4>
                                     <p class="text-sm font-bold ${messageColor}">${resultMessage}</p>
-                                    <p class="text-xs text-gray-500">Probability: ${(probability * 100).toFixed(2)}%</p>
+                                    <p class="text-xs text-gray-500">
+                                        Probability: **Screen: ${(prob_class1 * 100).toFixed(2)}%** | Camera: ${(prob_class0 * 100).toFixed(2)}%
+                                    </p>
+                                    <p class="text-xs text-gray-500">Confidence: ${(confidence * 100).toFixed(2)}%</p>
                                 </div>
                             </div>
                         `;
@@ -213,32 +240,43 @@
                             `;
                         }
 
-                        // Перевіряємо, чи існує словник formattedReceipt
+                        // Перевіряємо, чи існує словник formattedReceipt (розпарсений або об'єкт помилки)
                         if (formattedReceipt) {
-                            let itemsHtml = '';
-                            if (formattedReceipt.items && formattedReceipt.items.length > 0) {
-                                itemsHtml = `
-                                    <h6 class="text-xs font-medium text-gray-700 mt-2 mb-1">Items:</h6>
-                                    <ul class="list-disc list-inside text-xs text-gray-600 space-y-1">
+                            if (formattedReceipt.error) {
+                                cardHtml += `
+                                    <div class="mt-4 p-2 bg-white rounded-md border border-gray-200">
+                                        <h5 class="text-xs font-medium text-gray-800 mb-1">Structured Receipt Data:</h5>
+                                        <p class="text-xs text-red-600">Error: ${formattedReceipt.message}</p>
+                                        <h6 class="text-xs font-medium text-gray-700 mt-2 mb-1">Raw Response:</h6>
+                                        <p class="text-xs text-gray-600 text-wrap">${formattedReceipt.raw_response}</p>
+                                    </div>
                                 `;
-                                formattedReceipt.items.forEach(item => {
-                                    const itemName = item.name || '-';
-                                    const itemQty = item.quantity || '-';
-                                    const itemPrice = item.price || '-';
-                                    itemsHtml += `<li>${itemName} (${itemQty} x ${itemPrice})</li>`;
-                                });
-                                itemsHtml += `</ul>`;
-                            }
+                            } else {
+                                let itemsHtml = '';
+                                if (formattedReceipt.items && formattedReceipt.items.length > 0) {
+                                    itemsHtml = `
+                                        <h6 class="text-xs font-medium text-gray-700 mt-2 mb-1">Items:</h6>
+                                        <ul class="list-disc list-inside text-xs text-gray-600 space-y-1">
+                                    `;
+                                    formattedReceipt.items.forEach(item => {
+                                        const itemName = item.name || '-';
+                                        const itemQty = item.quantity || '-';
+                                        const itemPrice = item.price || '-';
+                                        itemsHtml += `<li>${itemName} (${itemQty} x ${itemPrice})</li>`;
+                                    });
+                                    itemsHtml += `</ul>`;
+                                }
 
-                            cardHtml += `
-                                <div class="mt-4 p-2 bg-white rounded-md border border-gray-200">
-                                    <h5 class="text-xs font-medium text-gray-800 mb-1">Structured Receipt Data:</h5>
-                                    <p class="text-xs text-gray-600"><strong>Store:</strong> ${formattedReceipt.store || '-'}</p>
-                                    <p class="text-xs text-gray-600"><strong>Total Amount:</strong> ${formattedReceipt.amount || '-'}</p>
-                                    <p class="text-xs text-gray-600"><strong>Date:</strong> ${formattedReceipt.date || '-'}</p>
-                                    ${itemsHtml}
-                                </div>
-                            `;
+                                cardHtml += `
+                                    <div class="mt-4 p-2 bg-white rounded-md border border-gray-200">
+                                        <h5 class="text-xs font-medium text-gray-800 mb-1">Structured Receipt Data:</h5>
+                                        <p class="text-xs text-gray-600"><strong>Store:</strong> ${formattedReceipt.store || '-'}</p>
+                                        <p class="text-xs text-gray-600"><strong>Total Amount:</strong> ${formattedReceipt.amount || '-'}</p>
+                                        <p class="text-xs text-gray-600"><strong>Date:</strong> ${formattedReceipt.date || '-'}</p>
+                                        ${itemsHtml}
+                                    </div>
+                                `;
+                            }
                         } else {
                             cardHtml += `
                                 <div class="mt-4 p-2 bg-white rounded-md border border-gray-200">

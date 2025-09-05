@@ -2,7 +2,8 @@ import os
 import asyncio
 import nest_asyncio
 import uvicorn
-from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+import json # Додаємо імпорт json
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -16,15 +17,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
 nest_asyncio.apply()
 ngrok.set_auth_token(os.getenv("NGROK_AUTH_TOKEN")) 
 
-
 # --- Model and prediction logic ---
-
-model_container = ModelContainer(model_path=os.getenv("MODEL_PATH"))
-
+model_container = ModelContainer(model_type=os.getenv("MODEL_TYPE"), 
+                                 model_path=os.getenv("MODEL_PATH"))
 
 app = FastAPI(
     title="Image Screen Detector API",
@@ -33,8 +31,12 @@ app = FastAPI(
 
 class PredictionResult(BaseModel):
     filename: str
-    probability: float
+    probability_class_1: float
+    probability_class_0: float
+    predicted_class: int
+    confidence: float
     extracted_text: Optional[str] = None
+    formatted_receipt: Optional[str] = None # Змінено тип на str
 
 class PredictionResponse(BaseModel):
     predictions: List[PredictionResult]
@@ -48,7 +50,10 @@ async def serve_html(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 @app.post("/predict", response_model=PredictionResponse)
-async def predict_images(files: List[UploadFile] = File(...)):
+async def predict_images(
+    files: List[UploadFile] = File(...), 
+    use_gemini_api: bool = Form(False)
+):
     """
     Accepts a list of image files and returns the probability that each one was taken from a screen,
     along with any extracted text.
@@ -72,18 +77,30 @@ async def predict_images(files: List[UploadFile] = File(...)):
         
         # Step 3: Extract text from each image individually
         extracted_texts = [pytesseract_get_text_from_image(img) for img in decoded_images]
-        formatted_receipts = [gemini_parse_text_to_json(text) for text in extracted_texts]
-        print(formatted_receipts)
+        
+        if use_gemini_api:
+            formatted_receipts = [json.dumps(gemini_parse_text_to_json(text)) for text in extracted_texts]
+        else:
+            formatted_receipts = [None] * len(extracted_texts)
+
         # Step 4: Combine all results into a single list
         predictions = []
         for i, filename in enumerate(filenames):
+            prob_class1 = probabilities[i]
+            prob_class0 = 1 - prob_class1
+            predicted_class = 1 if prob_class1 >= 0.5 else 0
+            confidence = max(prob_class1, prob_class0)
+
             predictions.append({
                 "filename": filename,
-                "probability": probabilities[i],
+                "probability_class_1": prob_class1,
+                "probability_class_0": prob_class0,
+                "predicted_class": predicted_class,
+                "confidence": confidence,
                 "extracted_text": extracted_texts[i],
                 "formatted_receipt": formatted_receipts[i]
             })
-        
+                
         return {"predictions": predictions}
 
     except FileNotFoundError as e:
@@ -91,11 +108,10 @@ async def predict_images(files: List[UploadFile] = File(...)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
 
-
 async def run_server_and_ngrok():
-    # public_url = ngrok.connect(8000)
-    # print(f"\nPublic URL: {public_url}\n")
-    config = uvicorn.Config(app, host="0.0.00", port=8000)
+    public_url = ngrok.connect(8000)
+    print(f"\nPublic URL: {public_url}\n")
+    config = uvicorn.Config(app, host="0.0.0.0", port=8000)
     server = uvicorn.Server(config)
     await server.serve()
 

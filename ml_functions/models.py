@@ -35,24 +35,33 @@ class SimpleCNN(nn.Module):
         x = self.conv_layers(x)
         x = self.flatten(x)
         x = self.fc_layers(x)
+
         return x
 
-        
 
-
-def get_pretrainded_mobilenetv2(device, pretrained=True):
+def get_pretrainded_mobilenetv2(device, pretrained=True, num_unfreeze_layers=0):
     model = models.mobilenet_v2(pretrained=pretrained)
 
-    # Freeze the parameters of the pre-trained layers
     for param in model.parameters():
         param.requires_grad = False
+    
+    if pretrained and num_unfreeze_layers > 0:
+        print(f"Unfreezing {num_unfreeze_layers} last layers for fine-tuning...")
+        for i, child in enumerate(reversed(model.features.children())):
+            if i < num_unfreeze_layers:
+                for param in child.parameters():
+                    param.requires_grad = True
+            else:
+                break
 
-    # Modify the classifier for binary classification
     num_ftrs = model.classifier[1].in_features
     model.classifier[1] = nn.Sequential(
         nn.Dropout(0.2), 
         nn.Linear(num_ftrs, 1)
     )
+    
+    for param in model.classifier.parameters():
+        param.requires_grad = True
 
     model = model.to(device)
     return model
