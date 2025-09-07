@@ -2,7 +2,7 @@ import os
 import asyncio
 import nest_asyncio
 import uvicorn
-import json # Додаємо імпорт json
+import json 
 from fastapi import FastAPI, File, UploadFile, HTTPException, Request, Form
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
@@ -110,7 +110,6 @@ async def predict_images(
 
 async def run_server_and_ngrok():
     public_url = ngrok.connect(8000)
-    print(f"\nPublic URL: {public_url}\n")
     config = uvicorn.Config(app, host="0.0.0.0", port=8000)
     server = uvicorn.Server(config)
     await server.serve()
