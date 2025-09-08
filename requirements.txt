@@ -12,3 +12,5 @@ python-dotenv==1.0.1
 requests==2.31.0
 pytesseract==0.3.10
 imutils==0.5.4
+sqlalchemy==2.0.31
+psycopg2-binary==2.9.9
