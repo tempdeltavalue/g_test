@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>OCR Viewer</title>
+<style>
+body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+.container { display: flex; width: 90%; margin-top: 20px; }
+.image-box, .text-box { width: 50%; padding: 10px; box-sizing: border-box; }
+.image-box img { max-width: 100%; height: auto; border: 1px solid #ddd; }
+.text-box pre { white-space: pre-wrap; background-color: #f4f4f4; padding: 10px; border: 1px solid #ddd; }
+.navigation { margin: 20px 0; }
+.navigation a { padding: 10px 20px; margin: 0 10px; text-decoration: none; color: #fff; background-color: #007BFF; border-radius: 5px; }
+.navigation a.disabled { background-color: #ccc; pointer-events: none; }
+</style>
+</head>
+<body>
+<h1>OCR Viewer</h1>
+<h2><span id="counter">{{ current_index }}</span> / {{ total_count }}</h2>
+<div class="navigation">
+<a href="{{ url_for('prev_entry') }}" class="{{ 'disabled' if not has_prev }}">Попередня</a>
+<a href="{{ url_for('next_entry') }}" class="{{ 'disabled' if not has_next }}">Наступна</a>
+</div>
+
+<div class="container">
+    <div class="image-box">
+        <h3>{{ image_id }}</h3>
+        <img src="{{ url_for('images', path=image_id) }}" alt="Receipt Image">
+    </div>
+    <div class="text-box">
+        <h3>OCR Text:</h3>
+        <pre>{{ ocr_text }}</pre>
+    </div>
+</div>
+
+</body>
+</html>
